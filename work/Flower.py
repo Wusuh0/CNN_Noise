@@ -4,7 +4,7 @@ import time
 from torch import nn, optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-from util.Model_Func import train,test
+from util.Model_Func import train,test,preprocess_Data
 from util.Noise import gasuss_noise
 
 
@@ -34,10 +34,13 @@ class Net(nn.Module):
         )
         # 分类层
         self.classifier = nn.Sequential(
-            nn.Linear(in_features=4608, out_features=4096),
+            nn.Linear(in_features=7 * 7 * 512, out_features=4096),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(in_features=4096, out_features=10)
+            nn.Linear(in_features=4096, out_features=4096),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(in_features=4096, out_features=5)
         )
         self.softmax = nn.Softmax(dim=1)
 
@@ -68,31 +71,18 @@ class Net(nn.Module):
 class noiseNet(Net):
     def forward(self,x):
         x = self.conv1(x)
-        x = gasuss_noise(x, var=0.1)
+        x = gasuss_noise(x, var=0.5)
         x = self.features(x)
         x = torch.flatten(x,1)
         x = self.softmax(self.classifier(x))
         return x
 
-def STLPreprocess_Data():
-    batch_size = 128
-    train_loader = DataLoader(
-        datasets.STL10(root="data", split="train", download=False, transform=transforms.ToTensor()),
-        batch_size=batch_size,
-        shuffle=True,
-        drop_last=True,
-    )
-    test_loader = DataLoader(
-        datasets.STL10(root="data", split="test", download=False, transform=transforms.ToTensor()),
-        batch_size=batch_size,
-    )
-    return train_loader,test_loader
 if __name__ =="__main__":
 
     #读取数据
-    train_loader, test_loader = STLPreprocess_Data()
+    train_loader, test_loader = preprocess_Data('data/flower/')
     #初始化模型
-    model = noiseNet()
+    model = Net()
     print(model)
     # 定义损失函数，优化器和训练参数
     criterion = nn.CrossEntropyLoss()
@@ -108,5 +98,5 @@ if __name__ =="__main__":
         print(f"Epoch {epoch}训练时间: {elapsed_time}秒")
         test(model,  test_loader)
     # 保存模型
-    save_path = 'model/stl/'
-    torch.save(model.state_dict(), save_path + 'epoch10_conv1_0.1.pth')
+    save_path = 'model/flower/'
+    torch.save(model.state_dict(), save_path + 'epoch10.pth')

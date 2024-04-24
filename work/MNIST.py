@@ -31,7 +31,7 @@ class Net(nn.Module):
 class noiseNet(Net):
     def forward(self, x):
         x = self.pool1(self.conv1(x))
-        x = gasuss_noise(x, var=1)
+        x = gasuss_noise(x, var=x.detach().abs().mean())
         x = self.pool2(self.conv2(x))
         x = self.flatten(self.dropout(x))
         x = self.relu(self.fc1(x))
@@ -82,7 +82,7 @@ def MNISTPreprocess_Data():
         datasets.MNIST(
             "data/mnist_data",
             train=True,
-            download=False,
+            download=True,
             transform=transforms.Compose([transforms.ToTensor()]),
         ),
         batch_size=batch_size,
@@ -122,4 +122,4 @@ if __name__ =="__main__":
         train(noiseModel, device, train_loader, optimizer, epoch)
         test(noiseModel, device, test_loader)
 
-    torch.save(noiseModel.state_dict(), 'model/mnist/epoch5_pool1_1.pth')
+    torch.save(noiseModel.state_dict(), 'model/mnist/epoch5_pool1_mean.pth')

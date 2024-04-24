@@ -1,7 +1,7 @@
-from torch.utils.data import DataLoader
-from torchvision.datasets import STL10
-from torchvision.transforms import ToTensor
+#加载类别
+import numpy as np
 
-
-
-test_batch = next(iter(test_loader))
+with open('data/stl10_binary/class_names.txt', 'r') as file:
+    class_names = [line.strip() for line in file.readlines()]
+class_names = np.array(class_names)
+print(class_names[0])

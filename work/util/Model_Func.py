@@ -17,12 +17,11 @@ def train(model, trainloader, optimizer, criterion, epoch):
         loss.backward()
         optimizer.step()
         # 打印损失
-        if i % 10 == 0:
-            print(
-                f"Train Epoch: {epoch} [{i * len(data)}/{len(trainloader.dataset)}"
-                f" ({10.0 * i / len(trainloader):.0f}%)]"
-                f"\tLoss: {loss.item():.6f}"
-            )
+        print(
+            f"Train Epoch: {epoch} [{i * len(trainloader)}/{len(trainloader.dataset)}"
+            f" ({100.0 * i / len(trainloader):.0f}%)]"
+            f"\tLoss: {loss.item():.6f}"
+        )
 
 
 def test(model, testloader):
@@ -46,10 +45,11 @@ def test(model, testloader):
 
 
 def preprocess_Data(path):
-    batch_size = 64
+    batch_size = 128
     # 定义数据预处理步骤
     transform = transforms.Compose([
         transforms.ToTensor(),
+        transforms.Resize([224, 224])
     ])
 
     # 加载数据集
