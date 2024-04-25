@@ -92,13 +92,15 @@ if __name__ =="__main__":
     #读取数据
     train_loader, test_loader = STLPreprocess_Data()
     #初始化模型
+    path = 'model/stl/'
     model = Net()
-    model.load_state_dict(torch.load("model/stl/epoch10.pth"))
+    model.load_state_dict(torch.load(path + "epoch20.pth"))
+    model.to(torch.device('cuda:1'))
     print(model)
     # 定义损失函数，优化器和训练参数
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.0002, momentum=0.9)
-    num_epochs = 10
+    optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+    num_epochs = 20
     torch.set_num_threads(8)
     # 训练模型
     for epoch in range(1, num_epochs + 1):
@@ -108,6 +110,7 @@ if __name__ =="__main__":
         elapsed_time = end_time - start_time
         print(f"Epoch {epoch}训练时间: {elapsed_time}秒")
         test(model,  test_loader)
-    # 保存模型
-    save_path = 'model/stl/'
-    torch.save(model.state_dict(), save_path + 'epoch20.pth')
+        # 保存模型
+        if epoch % 10 == 0:
+            torch.save(model.state_dict(), path + 'epoch'+str(20+epoch)+'.pth')
+

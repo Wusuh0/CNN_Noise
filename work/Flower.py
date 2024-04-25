@@ -71,7 +71,7 @@ class Net(nn.Module):
 class noiseNet(Net):
     def forward(self,x):
         x = self.conv1(x)
-        x = gasuss_noise(x, var=x.detach().abs().mean())
+        x = gasuss_noise(x, var=x.detach().abs().mean()/2)
         x = self.features(x)
         x = torch.flatten(x,1)
         x = self.softmax(self.classifier(x))
@@ -82,12 +82,14 @@ if __name__ =="__main__":
     #读取数据
     train_loader, test_loader = preprocess_Data('data/flower/')
     #初始化模型
-    model = noiseNet()
+    path = 'model/flower/'
+    model = Net()
+    model.load_state_dict(torch.load(path + "epoch40.pth"))
     print(model)
     # 定义损失函数，优化器和训练参数
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.0002, momentum=0.9)
-    num_epochs = 10
+    optimizer = optim.SGD(model.parameters(), lr=0.0001,momentum=0.8)
+    num_epochs = 20
     torch.set_num_threads(8)
     # 训练模型
     for epoch in range(1, num_epochs + 1):
@@ -97,6 +99,8 @@ if __name__ =="__main__":
         elapsed_time = end_time - start_time
         print(f"Epoch {epoch}训练时间: {elapsed_time}秒")
         test(model,  test_loader)
+        if epoch % 10 == 0:
+            torch.save(model.state_dict(), path + 'epoch'+str(40+epoch)+'.pth')
+
     # 保存模型
-    save_path = 'model/flower/'
-    torch.save(model.state_dict(), save_path + 'epoch10_conv1_mean.pth')
+
