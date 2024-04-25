@@ -3,43 +3,42 @@ import torch
 import numpy as np
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
-from MNIST import Net,noiseNet
+from Cifar10 import Net,noiseNet
 from util.Model_Func import preprocess_Data
-from MNIST import MNISTPreprocess_Data
+from Cifar10 import Cifar10Preprocess_Data
 # 加载数据集
-train_loader, test_loader = MNISTPreprocess_Data()
-path = "model/mnist/"
+train_loader, test_loader = Cifar10Preprocess_Data()
+path = "model/cifar10/"
 
 #加载类别
-with open('data/stl10_binary/class_names.txt', 'r') as file:
-    class_names = [line.strip() for line in file.readlines()]
-class_names = np.array(class_names)
+class_names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
 
 # 加载模型
-model = Net()
-model.load_state_dict(torch.load(path + "epoch5_pool1_mean.pth"))
+model = noiseNet()
+model.load_state_dict(torch.load(path + "epoch20_conv1_mean.pth"))
 print(model)
 model.eval()
 
 test_batch = next(iter(test_loader))
 test_images, labels = test_batch
-to_explain = test_images[:3]
+to_explain = test_images[5:8]
 train_batch = next(iter(train_loader))
 train_images, _ = train_batch
-
+print(np.vectorize(lambda x: class_names[x])(labels[5:8]))
 # 创建Explainer实例
-e = shap.GradientExplainer((model, model.conv2), train_images)
-shap_values,indexes = e.shap_values(to_explain,ranked_outputs=2)
-print(indexes)
-
-index_names = indexes.numpy()
+e = shap.GradientExplainer((model,model.pool1), train_images)
+shap_values , indexes = e.shap_values(to_explain,ranked_outputs = 2)
+print(np.array(shap_values).shape)
+index_names = np.vectorize(lambda x: class_names[x])(indexes)
 
 new_to_explain =np.swapaxes(np.swapaxes(to_explain.numpy(), 1, -1), 1, 2)
 shap_values = [np.swapaxes(np.swapaxes(s, 2, 3), 1, -1) for s in shap_values]
+
 #可视化shap_value
-save_path='result/stl/'
-shap.image_plot(shap_values, new_to_explain, index_names,show =True)
-# plt.savefig(save_path + 'epoch10_f2.png')
+shap.image_plot(shap_values, new_to_explain,index_names,show = False)
+# show = False
+save_path='result/cifar10/conv1_mean/'
+plt.savefig(save_path + 'pool1.png')
 
 
 

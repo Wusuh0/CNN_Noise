@@ -68,7 +68,7 @@ class Net(nn.Module):
 class noiseNet(Net):
     def forward(self,x):
         x = self.conv1(x)
-        x = gasuss_noise(x, var=0.1)
+        x = gasuss_noise(x, var=x.detach().abs().mean())
         x = self.features(x)
         x = torch.flatten(x,1)
         x = self.softmax(self.classifier(x))
@@ -92,7 +92,8 @@ if __name__ =="__main__":
     #读取数据
     train_loader, test_loader = STLPreprocess_Data()
     #初始化模型
-    model = noiseNet()
+    model = Net()
+    model.load_state_dict(torch.load("model/stl/epoch10.pth"))
     print(model)
     # 定义损失函数，优化器和训练参数
     criterion = nn.CrossEntropyLoss()
@@ -109,4 +110,4 @@ if __name__ =="__main__":
         test(model,  test_loader)
     # 保存模型
     save_path = 'model/stl/'
-    torch.save(model.state_dict(), save_path + 'epoch10_conv1_0.1.pth')
+    torch.save(model.state_dict(), save_path + 'epoch20.pth')

@@ -71,7 +71,7 @@ class Net(nn.Module):
 class noiseNet(Net):
     def forward(self,x):
         x = self.conv1(x)
-        x = gasuss_noise(x, var=0.5)
+        x = gasuss_noise(x, var=x.detach().abs().mean())
         x = self.features(x)
         x = torch.flatten(x,1)
         x = self.softmax(self.classifier(x))
@@ -82,7 +82,7 @@ if __name__ =="__main__":
     #读取数据
     train_loader, test_loader = preprocess_Data('data/flower/')
     #初始化模型
-    model = Net()
+    model = noiseNet()
     print(model)
     # 定义损失函数，优化器和训练参数
     criterion = nn.CrossEntropyLoss()
@@ -99,4 +99,4 @@ if __name__ =="__main__":
         test(model,  test_loader)
     # 保存模型
     save_path = 'model/flower/'
-    torch.save(model.state_dict(), save_path + 'epoch10.pth')
+    torch.save(model.state_dict(), save_path + 'epoch10_conv1_mean.pth')

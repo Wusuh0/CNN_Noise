@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="NoiseLayer" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="NoiseLayer" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.8 (CNN_Noise)" project-jdk-type="Python SDK" />
 </project>

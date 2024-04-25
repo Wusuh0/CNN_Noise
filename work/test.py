@@ -1,7 +1,10 @@
-#加载类别
+import torch
 import numpy as np
+from STL import STLPreprocess_Data,Net,noiseNet
+from util.Model_Func import test
+# 加载模型
+train_loader, test_loader = STLPreprocess_Data()
+model = Net()
+model.load_state_dict(torch.load( "model/stl/epoch10.pth"))
 
-with open('data/stl10_binary/class_names.txt', 'r') as file:
-    class_names = [line.strip() for line in file.readlines()]
-class_names = np.array(class_names)
-print(class_names[0])
+test(model, test_loader)
