@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import time
+import os
 from torch import nn, optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
@@ -71,7 +72,7 @@ class Net(nn.Module):
 class noiseNet(Net):
     def forward(self,x):
         x = self.conv1(x)
-        x = gasuss_noise(x, var=x.detach().abs().mean()/2)
+        x = gasuss_noise(x, var=x.detach().abs().mean().to('cpu')/2)
         x = self.features(x)
         x = torch.flatten(x,1)
         x = self.softmax(self.classifier(x))
@@ -79,28 +80,43 @@ class noiseNet(Net):
 
 if __name__ =="__main__":
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print("Using", device)
     #读取数据
     train_loader, test_loader = preprocess_Data('data/flower/')
     #初始化模型
     path = 'model/flower/'
-    model = Net()
-    model.load_state_dict(torch.load(path + "epoch40.pth"))
+    model = noiseNet().to(device)
     print(model)
     # 定义损失函数，优化器和训练参数
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.0001,momentum=0.8)
-    num_epochs = 20
+    optimizer = optim.Adam(model.parameters(), lr=0.0002)
+    num_epochs = 200
     torch.set_num_threads(8)
+
+    losses = []
+    times = []
     # 训练模型
     for epoch in range(1, num_epochs + 1):
         start_time = time.time()
-        train(model, train_loader, optimizer, criterion, epoch)
+        loss = train(model, device, train_loader, optimizer, criterion, epoch)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"Epoch {epoch}训练时间: {elapsed_time}秒")
-        test(model,  test_loader)
-        if epoch % 10 == 0:
-            torch.save(model.state_dict(), path + 'epoch'+str(40+epoch)+'.pth')
+        losses.append(loss)
+        times.append(elapsed_time)
+        # 保存模型
+        if epoch % 40 == 0:
+            torch.save(model.state_dict(), path + 'epoch' + str(epoch) + 'conv1_0.5mean.pth')
+            test(model, device, test_loader, criterion)
 
-    # 保存模型
+    if not os.path.exists(path+'logs'):
+        os.makedirs(path+'logs')
+        # 保存损失
+    with open(os.path.join(path+'logs', 'conv1_meanLosses.txt'), 'w') as f:
+        for loss in losses:
+            f.write(f"{loss}\n")
+        # 保存训练时间
+    with open(os.path.join(path+'logs', 'conv1_meanTimes.txt'), 'w') as f:
+        for time in times:
+            f.write(f"{time}\n")
 

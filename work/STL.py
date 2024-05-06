@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import time
+import os
 from torch import nn, optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
@@ -68,14 +69,14 @@ class Net(nn.Module):
 class noiseNet(Net):
     def forward(self,x):
         x = self.conv1(x)
-        x = gasuss_noise(x, var=x.detach().abs().mean())
+        x = gasuss_noise(x, var=x.detach().abs().mean().to('cpu')/2)
         x = self.features(x)
         x = torch.flatten(x,1)
         x = self.softmax(self.classifier(x))
         return x
 
 def STLPreprocess_Data():
-    batch_size = 128
+    batch_size = 640
     train_loader = DataLoader(
         datasets.STL10(root="data", split="train", download=False, transform=transforms.ToTensor()),
         batch_size=batch_size,
@@ -89,28 +90,43 @@ def STLPreprocess_Data():
     return train_loader,test_loader
 if __name__ =="__main__":
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cpu")
+    print("Using", device)
     #读取数据
     train_loader, test_loader = STLPreprocess_Data()
     #初始化模型
     path = 'model/stl/'
-    model = Net()
-    model.load_state_dict(torch.load(path + "epoch20.pth"))
-    model.to(torch.device('cuda:1'))
+    model = noiseNet().to(device)
+    model.load_state_dict(torch.load( "model/stl/epoch360conv1_0.5mean.pth",map_location=lambda storage, loc: storage.cuda(0)))
     print(model)
     # 定义损失函数，优化器和训练参数
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
-    num_epochs = 20
+    optimizer = optim.SGD(model.parameters(), lr=0.0001,momentum=0.9)
+    num_epochs = 400
     torch.set_num_threads(8)
+    losses = []
+    times = []
     # 训练模型
-    for epoch in range(1, num_epochs + 1):
+    for epoch in range(361, num_epochs + 1):
         start_time = time.time()
-        train(model, train_loader, optimizer, criterion, epoch)
+        loss = train(model,device, train_loader, optimizer, criterion, epoch)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"Epoch {epoch}训练时间: {elapsed_time}秒")
-        test(model,  test_loader)
+        losses.append(loss)
+        times.append(elapsed_time)
         # 保存模型
-        if epoch % 10 == 0:
-            torch.save(model.state_dict(), path + 'epoch'+str(20+epoch)+'.pth')
+        if epoch % 20 == 0:
+            torch.save(model.state_dict(), path + 'epoch'+str(epoch)+'conv1_0.5mean.pth')
+            if not os.path.exists(path+'logs'):
+                os.makedirs(path+'logs')
+                # 保存损失
+            with open(os.path.join(path+'logs', 'epoch'+str(epoch)+'_Losses.txt'), 'w') as f:
+                for loss in losses:
+                    f.write(f"{loss}\n")
+                # 保存训练时间
+            with open(os.path.join(path+'logs', 'epoch'+str(epoch)+'_Times.txt'), 'w') as f:
+                for time1 in times:
+                    f.write(f"{time1}\n")
+            test(model, device,test_loader,criterion)
 

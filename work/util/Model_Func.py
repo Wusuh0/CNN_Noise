@@ -3,45 +3,44 @@ from torchvision import datasets, transforms
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
-def train(model, trainloader, optimizer, criterion, epoch):
+def train(model, device, train_loader, optimizer, criterion, epoch):
     model.train()
-    # 记录训练时间
-    for i, data in enumerate(trainloader, 0):
-        # 获取输入
-        inputs, labels = data
-        # 梯度清零
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
-        # 前向传播 + 反向传播 + 优化
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
+        output = model(data)
+        loss = criterion(output, target)
         loss.backward()
         optimizer.step()
-        # 打印损失
         print(
-            f"Train Epoch: {epoch} [{i * len(trainloader)}/{len(trainloader.dataset)}"
-            f" ({100.0 * i / len(trainloader):.0f}%)]"
+            f"Train Epoch: {epoch} [{(batch_idx+1) * len(data)}/{len(train_loader.dataset)}"
+            f" ({100.0 * (batch_idx+1) / len(train_loader):.0f}%)]"
             f"\tLoss: {loss.item():.6f}"
         )
+    return loss.item()
 
 
-def test(model, testloader):
-    model.eval()
-    test_loss = 0
+
+def test(model, device, test_loader, criterion):
+    model.eval()  # 设置模型为评估模式
+
+    test_loss = 0.0
     correct = 0
     total = 0
-    with torch.no_grad():
 
-        for images, labels in testloader:
-            outputs = model(images)
-            test_loss += F.nll_loss(outputs.log(), labels).item()
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-        print(
-            f"\nTest set: Average loss: {test_loss:.4f},"
-            f" Accuracy: {correct}/{len(testloader.dataset)}"
-            f" ({100.0 * correct / len(testloader.dataset):.0f}%)\n"
-        )
+    # 遍历测试数据集
+    with torch.no_grad():  # 禁用梯度计算以节省内存和计算时间
+        for data, target in test_loader:
+            data, target = data.to(device), target.to(device)
+            outputs = model(data)
+            loss = criterion(outputs, target)
+            test_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += target.size(0)
+            correct += predicted.eq(target).sum().item()
+
+    test_loss /= len(test_loader)
+    print(f"Test set: Average loss: {test_loss:.4f}, Accuracy: {100.0 * correct / total}%")
 
 
 def preprocess_Data(path):
