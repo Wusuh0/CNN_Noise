@@ -31,7 +31,7 @@ class Net(nn.Module):
 class noiseNet(Net):
     def forward(self, x):
         x = self.conv1(x)
-        x = gasuss_noise(x, var=x.detach().abs().mean())
+        x = gasuss_noise(x, var=x.detach().abs().mean().to("cpu"))
         x = self.pool1(x)
         x = self.pool2(self.conv2(x))
         x = self.flatten(self.dropout(x))
@@ -104,7 +104,8 @@ if __name__ =="__main__":
     # 训练参数
 
     num_epochs = 5
-    device = torch.device("cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print("Using",device)
     train_loader, test_loader = MNISTPreprocess_Data()
 
     # 无噪声模型
