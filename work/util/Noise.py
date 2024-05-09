@@ -7,7 +7,7 @@ def gasuss_noise(image, mean=0, var=0.004):
         var : 方差
     '''
     noise_np = np.random.normal(mean, var ** 0.5, image.shape).astype(np.float32)
-    noise = torch.tensor(noise_np)
+    noise = torch.tensor(noise_np).to("cuda:0")
     out = image + noise
     return out
 
