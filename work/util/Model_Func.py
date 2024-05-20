@@ -2,8 +2,9 @@ import torch
 from torchvision import datasets, transforms
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
+from util.Noise import gasuss_noise
 
-def train(model, device, train_loader, optimizer, criterion, epoch):
+def train(model, device, train_loader, optimizer, criterion, epoch, noiseGrad = 0):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
@@ -11,6 +12,12 @@ def train(model, device, train_loader, optimizer, criterion, epoch):
         output = model(data)
         loss = criterion(output, target)
         loss.backward()
+        #对梯度加噪
+        if noiseGrad == 1:
+            for param in model.parameters():
+                gradients = param.grad
+                gradients = gasuss_noise(gradients, var=gradients.detach().abs().mean().to('cpu') / 2)
+                
         optimizer.step()
         print(
             f"Train Epoch: {epoch} [{(batch_idx+1) * len(data)}/{len(train_loader.dataset)}"

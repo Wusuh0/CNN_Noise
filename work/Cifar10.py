@@ -39,6 +39,13 @@ class noiseNet(Net):
         x = self.softmax(self.fc2(x))
         return x
 
+def addNoise_grad(model):
+    for param in model.parameters():
+        gradients = param.grad
+        print(gradients)
+        gradients = gasuss_noise(gradients, var=gradients.detach().abs().mean().to('cpu') / 2)
+        print(gradients)
+
 def train(model, device, train_loader, optimizer, epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
@@ -47,6 +54,7 @@ def train(model, device, train_loader, optimizer, epoch):
         output = model(data)
         loss = F.nll_loss(output.log(), target)
         loss.backward()
+        grad = addNoise_grad(model)
         optimizer.step()
         if batch_idx % 100 == 0:
             print(

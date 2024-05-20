@@ -3,18 +3,19 @@ import torch
 import time
 import os
 from torch import nn, optim
+from torch.optim.lr_scheduler import StepLR
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from util.Model_Func import train,test
 from util.Noise import gasuss_noise
-
+from util.Model import Net,noiseNet,c1,c1_Mean,p1,p1_halfMean,p4,p4_halfMean
 
 class Net(nn.Module):
     def __init__(self,init_weight = True):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1)
         # 特征提取层
         self.features = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
@@ -60,7 +61,6 @@ class Net(nn.Module):
 
 
     def forward(self,x):
-        x = self.conv1(x)
         x = self.features(x)
         x = torch.flatten(x,1)
         x = self.softmax(self.classifier(x))
@@ -68,7 +68,7 @@ class Net(nn.Module):
 
 class noiseNet(Net):
     def forward(self,x):
-        x = self.conv1(x)
+        x = self.beFeatures(x)
         x = gasuss_noise(x, var=x.detach().abs().mean().to('cpu')/2)
         x = self.features(x)
         x = torch.flatten(x,1)
@@ -96,28 +96,35 @@ if __name__ =="__main__":
     #读取数据
     train_loader, test_loader = STLPreprocess_Data()
     #初始化模型
-    path = 'model/stl/'
-    model = noiseNet().to(device)
-    model.load_state_dict(torch.load( "model/stl/epoch360conv1_0.5mean.pth",map_location=lambda storage, loc: storage.cuda(0)))
+
+    model = p1_halfMean().to(device)
+    # model.load_state_dict(torch.load( "model/stl/grad_0.5mean/epoch40grad_0.5mean.pth",map_location=lambda storage, loc: storage.cuda(0)))
     print(model)
     # 定义损失函数，优化器和训练参数
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.0001,momentum=0.9)
-    num_epochs = 400
+    optimizer = optim.SGD(model.parameters(), lr=0.01,momentum=0.9,weight_decay=0.0001,nesterov=True)
+    #调整学习率
+    scheduler = StepLR(optimizer, step_size=10, gamma=0.2)
+    num_epochs = 100
     torch.set_num_threads(8)
     losses = []
     times = []
-    # 训练模型
-    for epoch in range(361, num_epochs + 1):
+    path = 'model/stl/pool1_0.5mean/'
+    if not os.path.exists(path):
+        os.makedirs(path)
+    # 训练模型-
+    for epoch in range(1, num_epochs + 1):
         start_time = time.time()
-        loss = train(model,device, train_loader, optimizer, criterion, epoch)
+        loss = train(model,device, train_loader, optimizer, criterion, epoch, noiseGrad = 0)
         end_time = time.time()
         elapsed_time = end_time - start_time
         losses.append(loss)
         times.append(elapsed_time)
+        scheduler.step()
         # 保存模型
         if epoch % 20 == 0:
-            torch.save(model.state_dict(), path + 'epoch'+str(epoch)+'conv1_0.5mean.pth')
+            torch.save(model.state_dict(), path + 'epoch'+str(epoch)+'pool1_0.5mean.pth')
+        if epoch % 100 == 0:
             if not os.path.exists(path+'logs'):
                 os.makedirs(path+'logs')
                 # 保存损失
