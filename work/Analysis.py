@@ -18,18 +18,18 @@ class_names = np.array(class_list)
 print(class_names)
 model = Net()
 model.load_state_dict(torch.load( path + "epoch400.pth",map_location=lambda storage, loc: storage.cpu()))
-model_noise = noiseNet()
-model_noise.load_state_dict(torch.load(path +  "epoch400conv1_0.5mean.pth",map_location=lambda storage, loc: storage.cpu()))
+model_noise = c1_Mean()
+model_noise.load_state_dict(torch.load(path +  "conv1_0.25mean/epoch400conv1_0.25mean.pth",map_location=lambda storage, loc: storage.cpu()))
 model.eval()
 model_noise.eval()
 
-indices = torch.tensor([24])
-test_batch = next(iter(test_loader))
-test_images, labels = test_batch
-res = np.load("result/res.npy")
-resn = np.load("result/resn.npy")
-print(res[24])
-print(resn[24])
+# indices = torch.tensor([24])
+# test_batch = next(iter(test_loader))
+# test_images, labels = test_batch
+# res = np.load("result/res.npy")
+# resn = np.load("result/resn.npy")
+# print(res[24])
+# print(resn[24])
 # with torch.no_grad():
 #     res = model(test_images)
 #     np.save("result/res.npy",res.numpy())
@@ -51,42 +51,39 @@ noiseCnt = 0
 #相反
 Cnt = 0
 
-# with torch.no_grad():  # 禁用梯度计算以节省内存和计算时间
-#     for data, labels in test_loader:
-#         res = model(data)
-#         resn = model_noise(data)
-#         print(res.shape)
-#         total += labels.size(0)
-#         for i in range(len(data)):
-#             # 预测相同
-#             if res[i].argmax() == resn[i].argmax():
-#                 equalCnt = equalCnt + 1
-#                 # 预测正确
-#                 if res[i].argmax() == labels[i]:
-#                     accCnt = accCnt + 1
-#                 # 预测错误
-#                 else:
-#                     errorCnt = errorCnt + 1
-#             # 预测不同
-#             else:
-#                 # 无噪模型正确
-#                 if res[i].argmax() == labels[i]:
-#                     Cnt = Cnt + 1
-#                     print("无噪")
-#                     print(i, class_names[labels[i]])
-#                 # 加噪模型正确
-#                 elif resn[i].argmax() == labels[i]:
-#                     noiseCnt = noiseCnt + 1
-#                     print("有噪")
-#                     print(i, class_names[labels[i]])
-#
-#
-# print(equalCnt,accCnt,errorCnt)
-# print(Cnt,noiseCnt)
-#
-# print(f"{equalCnt/total*100}%")
-# print(f"{accCnt/total*100}%")
-# print(f"{errorCnt/total*100}%")
-#
-# print(f"{Cnt/total*100}%")
-# print(f"{noiseCnt/total*100}%")
+with torch.no_grad():  # 禁用梯度计算以节省内存和计算时间
+    for data, labels in test_loader:
+        res = model(data)
+        resn = model_noise(data)
+        print(res.shape)
+        total += labels.size(0)
+        for i in range(len(data)):
+            # 预测相同
+            if res[i].argmax() == resn[i].argmax():
+                equalCnt = equalCnt + 1
+                # 预测正确
+                if res[i].argmax() == labels[i]:
+                    accCnt = accCnt + 1
+                # 预测错误
+                else:
+                    errorCnt = errorCnt + 1
+            # 预测不同
+            else:
+                # 无噪模型正确
+                if res[i].argmax() == labels[i]:
+                    Cnt = Cnt + 1
+                # 加噪模型正确
+                elif resn[i].argmax() == labels[i]:
+                    noiseCnt = noiseCnt + 1
+
+
+
+print(equalCnt,accCnt,errorCnt)
+print(Cnt,noiseCnt)
+
+print(f"{equalCnt/total*100}%")
+print(f"{accCnt/total*100}%")
+print(f"{errorCnt/total*100}%")
+
+print(f"{Cnt/total*100}%")
+print(f"{noiseCnt/total*100}%")

@@ -97,7 +97,7 @@ if __name__ =="__main__":
     train_loader, test_loader = STLPreprocess_Data()
     #初始化模型
 
-    model = p1_halfMean().to(device)
+    model = Net().to(device)
     # model.load_state_dict(torch.load( "model/stl/grad_0.5mean/epoch40grad_0.5mean.pth",map_location=lambda storage, loc: storage.cuda(0)))
     print(model)
     # 定义损失函数，优化器和训练参数
@@ -109,13 +109,13 @@ if __name__ =="__main__":
     torch.set_num_threads(8)
     losses = []
     times = []
-    path = 'model/stl/pool1_0.5mean/'
+    path = 'model/stl/grad_0.5mean/'
     if not os.path.exists(path):
         os.makedirs(path)
     # 训练模型-
     for epoch in range(1, num_epochs + 1):
         start_time = time.time()
-        loss = train(model,device, train_loader, optimizer, criterion, epoch, noiseGrad = 0)
+        loss = train(model,device, train_loader, optimizer, criterion, epoch, noiseGrad = 1)
         end_time = time.time()
         elapsed_time = end_time - start_time
         losses.append(loss)
@@ -123,7 +123,7 @@ if __name__ =="__main__":
         scheduler.step()
         # 保存模型
         if epoch % 20 == 0:
-            torch.save(model.state_dict(), path + 'epoch'+str(epoch)+'pool1_0.5mean.pth')
+            torch.save(model.state_dict(), path + 'new_epoch'+str(epoch)+'.pth')
         if epoch % 100 == 0:
             if not os.path.exists(path+'logs'):
                 os.makedirs(path+'logs')

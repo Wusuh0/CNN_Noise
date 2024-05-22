@@ -1,98 +1,104 @@
 import numpy as np
 import torch
+from time import time
+import os
 from torch import nn, optim
 from torch.nn import functional as F
+from torch.optim.lr_scheduler import LambdaLR
 from torchvision import datasets, transforms
 from util.Noise import gasuss_noise
+from util.Model_Func import train,test
+_cfg = {
+    'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'VGG13': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'VGG16': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
+    'VGG19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
+}
 
+class VGG(nn.Module):
+    def __init__(self, vgg_name, num_class):
+        super(VGG, self).__init__()
+        self.features = self._make_layers(_cfg[vgg_name])
+        self.classifier = nn.Linear(512, num_class)
 
-class Net(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.dropout = nn.Dropout()
-        self.flatten = nn.Flatten()
-        self.fc1 = nn.Linear(64*4*4*4, 256)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(256, 10)
-        self.softmax = nn.Softmax(dim=1)
-
+    # pylint: disable=W0221,E1101
     def forward(self, x):
-        x = self.pool1(self.conv1(x))
-        x = self.pool2(self.conv2(x))
-        x = self.flatten(self.dropout(x))
-        x = self.relu(self.fc1(x))
-        x = self.softmax(self.fc2(x))
-        return x
+        out = self.features(x)
+        out = out.view(out.size(0), -1)
+        out = self.classifier(out)
+        return out
 
-class noiseNet(Net):
+    def _make_layers(self, cfg):
+        layers = []
+        in_channels = 3
+        for x in cfg:
+            if x == 'M':
+                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            else:
+                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
+                           nn.BatchNorm2d(x),
+                           nn.ReLU(inplace=True)]
+                in_channels = x
+        layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
+        return nn.Sequential(*layers)
+
+class noiseVGG(nn.Module):
+    def __init__(self, vgg_name, num_class, loc):
+        super(VGG, self).__init__()
+        self.beFeatures, self.features = self._make_layers(_cfg[vgg_name], loc)
+        self.classifier = nn.Linear(512, num_class)
     def forward(self, x):
-        x = self.conv1(x)
-        x = gasuss_noise(x, var=x.detach().abs().mean())
-        x = self.pool1(x)
-        x = self.pool2(self.conv2(x))
-        x = self.flatten(self.dropout(x))
-        x = self.relu(self.fc1(x))
-        x = self.softmax(self.fc2(x))
-        return x
+        x = self.beFeatures(x)
+        x = gasuss_noise(x, var=x.detach().abs().mean().to('cpu')/2)
+        out = self.features(x)
+        out = out.view(out.size(0), -1)
+        out = self.classifier(out)
+        return out
 
-def addNoise_grad(model):
-    for param in model.parameters():
-        gradients = param.grad
-        print(gradients)
-        gradients = gasuss_noise(gradients, var=gradients.detach().abs().mean().to('cpu') / 2)
-        print(gradients)
-
-def train(model, device, train_loader, optimizer, epoch):
-    model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(output.log(), target)
-        loss.backward()
-        grad = addNoise_grad(model)
-        optimizer.step()
-        if batch_idx % 100 == 0:
-            print(
-                f"Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)}"
-                f" ({100.0 * batch_idx / len(train_loader):.0f}%)]"
-                f"\tLoss: {loss.item():.6f}"
-            )
+    def _make_layers(self, cfg, loc):
+        beLayers = []
+        layers = []
+        in_channels = 3
+        for i, x in enumerate(cfg):
+            if x == 'M':
+                if i<loc:
+                    beLayers+= [nn.MaxPool2d(kernel_size=2, stride=2)]
+                else:
+                    layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            else:
+                if i<loc:
+                    beLayers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
+                           nn.BatchNorm2d(x),
+                           nn.ReLU(inplace=True)]
+                else:
+                    layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
+                               nn.BatchNorm2d(x),
+                               nn.ReLU(inplace=True)]
+                in_channels = x
+        layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
+        return nn.Sequential(*beLayers), nn.Sequential(*layers)
 
 
-def test(model, device, test_loader):
-    model.eval()
-    test_loss = 0
-    correct = 0
-    with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(device), target.to(device)
-            output = model(data)
-            test_loss += F.nll_loss(output.log(), target).item()  # sum up batch loss
-            pred = output.max(1, keepdim=True)[
-                1
-            ]  # get the index of the max log-probability
-            correct += pred.eq(target.view_as(pred)).sum().item()
+def Preprocess_Data():
+    batch_size = 640
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
+    ])
 
-    test_loss /= len(test_loader.dataset)
-    print(
-        f"\nTest set: Average loss: {test_loss:.4f},"
-        f" Accuracy: {correct}/{len(test_loader.dataset)}"
-        f" ({100.0 * correct / len(test_loader.dataset):.0f}%)\n"
-    )
-def Cifar10Preprocess_Data():
-    batch_size = 128
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
+    ])
     # 数据预处理
     train_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10(
             "data/cifar10_data",
             train=True,
             download=False,
-            transform=transforms.Compose([transforms.ToTensor()]),
+            transform=transform_train
         ),
         batch_size=batch_size,
         shuffle=True,
@@ -100,7 +106,7 @@ def Cifar10Preprocess_Data():
 
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10(
-            "data/cifar10_data", train=False, transform=transforms.Compose([transforms.ToTensor()])
+            "data/cifar10_data", train=False, transform=transform_test
         ),
         batch_size=batch_size,
         shuffle=False,
@@ -108,27 +114,61 @@ def Cifar10Preprocess_Data():
 
     return train_loader,test_loader
 
+#调整学习率
+def lr_lambda(epoch):
+    v = 0.0
+    if epoch<40:
+        v = 0.1
+    elif epoch<80:
+        v = 0.01
+    else:
+        v = 0.001
+    return v
+
+
 if __name__ =="__main__":
+
+    #读取数据
+    train_loader, test_loader = Preprocess_Data()
     # 训练参数
-
-    num_epochs = 10
-    device = torch.device("cpu")
-    train_loader, test_loader = Cifar10Preprocess_Data()
-
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    num_epochs = 100
+    criterion = nn.CrossEntropyLoss()
     #无噪声模型
-    # model = Net().to(device)
-    # optimizer = optim.SGD(model.parameters(), lr=0.005, momentum=0.8)
-    # for epoch in range(1, num_epochs + 1):
-    #     train(model, device, train_loader, optimizer, epoch)
-    #     test(model, device, test_loader)
-    #
-    # torch.save(model.state_dict(), 'model/cifar10/epoch20.pth')
+    model = VGG("VGG16",10).to(device)
+    print(model)
+    optimizer = optim.SGD(model.parameters(), lr=1,momentum=0.9,weight_decay=0.0005)
+    # 学习率
+    scheduler = LambdaLR(optimizer, lr_lambda)
 
-    # 加噪模型(控制噪声加入的位置和大小)
-    noiseModel = noiseNet().to(device)
-    optimizer = optim.SGD(noiseModel.parameters(), lr=0.005, momentum=0.8)
+    #训练模型
+    losses = []
+    times = []
+    path = 'model/cifar10/no/'
+    if not os.path.exists(path):
+        os.makedirs(path)
     for epoch in range(1, num_epochs + 1):
-        train(noiseModel, device, train_loader, optimizer, epoch)
-        test(noiseModel, device, test_loader)
+        start= time()
+        loss = train(model, device, train_loader, optimizer, criterion, epoch, noiseGrad=1)
+        cost_time = time() - start
+        losses.append(loss)
+        times.append(cost_time)
+        scheduler.step()
+        # 保存模型
+        if epoch % 20 == 0:
+            torch.save(model.state_dict(), path + f"epoch{epoch}.pth")
+            test(model, device, test_loader, criterion)
+        if epoch % 100 == 0:
+            if not os.path.exists(path + 'logs'):
+                os.makedirs(path + 'logs')
+                # 保存损失
+            with open(os.path.join(path + 'logs', 'epoch' + str(epoch) + '_Losses.txt'), 'w') as f:
+                for loss in losses:
+                    f.write(f"{loss}\n")
+                # 保存训练时间
+            with open(os.path.join(path + 'logs', 'epoch' + str(epoch) + '_Times.txt'), 'w') as f:
+                for Time in times:
+                    f.write(f"{Time}\n")
 
-    torch.save(noiseModel.state_dict(), 'model/cifar10/epoch10_conv1_mean.pth')
+
+

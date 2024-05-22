@@ -65,7 +65,7 @@ class Net(nn.Module):
 class noiseNet(Net):
     def forward(self,x):
         x = self.conv1(x)
-        x = gasuss_noise(x, var=x.detach().abs().mean().to('cpu')/2)
+        x = gasuss_noise(x, var=x.detach().abs().mean().to('cpu')/4)
         x = self.features(x)
         x = torch.flatten(x,1)
         x = self.softmax(self.classifier(x))
