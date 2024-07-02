@@ -44,12 +44,12 @@ class VGG(nn.Module):
 
 class noiseVGG(nn.Module):
     def __init__(self, vgg_name, num_class, loc):
-        super(VGG, self).__init__()
+        super(noiseVGG, self).__init__()
         self.beFeatures, self.features = self._make_layers(_cfg[vgg_name], loc)
         self.classifier = nn.Linear(512, num_class)
     def forward(self, x):
         x = self.beFeatures(x)
-        x = gasuss_noise(x, var=x.detach().abs().mean().to('cpu')/2)
+        x = gasuss_noise(x, var=x.detach().abs().mean().to('cpu')/2, device = "cpu")
         out = self.features(x)
         out = out.view(out.size(0), -1)
         out = self.classifier(out)
@@ -134,22 +134,21 @@ if __name__ =="__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     num_epochs = 100
     criterion = nn.CrossEntropyLoss()
-    #无噪声模型
-    model = VGG("VGG16",10).to(device)
-    print(model)
-    optimizer = optim.SGD(model.parameters(), lr=1,momentum=0.9,weight_decay=0.0005)
-    # 学习率
-    scheduler = LambdaLR(optimizer, lr_lambda)
 
     #训练模型
+    model = VGG("VGG16", 10).to(device)
+    print(model)
+    optimizer = optim.SGD(model.parameters(), lr=1, momentum=0.9, weight_decay=0.0005)
+    # 学习率
+    scheduler = LambdaLR(optimizer, lr_lambda)
     losses = []
     times = []
-    path = 'model/cifar10/no/'
+    path = f'model/cifar10/no/'
     if not os.path.exists(path):
         os.makedirs(path)
     for epoch in range(1, num_epochs + 1):
-        start= time()
-        loss = train(model, device, train_loader, optimizer, criterion, epoch, noiseGrad=1)
+        start = time()
+        loss = train(model, device, train_loader, optimizer, criterion, epoch)
         cost_time = time() - start
         losses.append(loss)
         times.append(cost_time)
@@ -169,6 +168,7 @@ if __name__ =="__main__":
             with open(os.path.join(path + 'logs', 'epoch' + str(epoch) + '_Times.txt'), 'w') as f:
                 for Time in times:
                     f.write(f"{Time}\n")
+
 
 
 
